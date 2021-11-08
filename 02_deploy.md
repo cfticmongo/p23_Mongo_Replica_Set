@@ -39,3 +39,78 @@ Cuando hayan pasado aprox 15-20seg (proceso elecciones) se habrá determinado
 cual es el primario y cuales son los secundarios.
 
 rs.status() // Devuelve información del cluster
+
+## Estados de los miembros
+
+PRIMARY Todas las operaciones del cluster se dirigen a este miembro
+SECONDARY Reciben una replica de cada operación que se ejecuta en el primario (oplog)
+
+Podemos desde la shell simular una conexión de cliente y realizar operaciones.
+
+Desde una shell conectada al primario
+
+```
+use clinica
+db.pacientes.insert({nombre: 'Juan', apellidos: 'Pérez'})
+db.pacientes.find()
+```
+
+Si intentamos realizar cualquier operación en un secundario, incluso
+desde la shell, comprobaremos que no se puede realizar.
+
+```
+// Cualquier operación devuelve error
+```
+
+Si necesitaramos de manera opcional que un miembro, cuando sea secundario,
+tenga permisos de lectura, debemos autorizarlo expresamente.
+
+```
+rs.secondaryOk() // desde la shell conectada al secondary que queremos autorizar
+
+db.pacientes.find() // ok
+
+db.pacientes.insert({nombre: "Laura"}) // lo que no podremos nunca es operaciones de escritura
+
+```
+
+¿Cuando se producen cambios de estado? 
+
+Los replica set tienen un mecanismo automatic failover que comprueba permanentemente la
+comunicación entre los miembros (2 seg ping). Si se detecta una interrupción de la comunicación
+mayor de 10 seg (parametrizable), el sistema entiende que el miembro no esta disponible
+y desencadena el proceso de elecciones para elegir un nuevo primario.
+
+## Configurar la prioridad de los miembros
+
+Podemos definir que un determinado miembro tenga prioridad a la hora de
+ser el primario. Con esta prioridad y siempre que sea posible un determinado
+servidor será siempre el primario.
+
+Se puede configurar al inicio (initiate) o reconfigurando el cluster (reconfig).
+
+Por ejemplo, vamos a reconfigurar para que el miembro server3 (27103) sea el primario:
+
+1.- Descargar el objeto de configuración.
+
+Desde la shell del primario
+
+```
+let configuration = rs.conf() // Devuelve el objeto de configuracion
+```
+
+2.- Cambiamos la prioridad del miembro (priority)
+
+```
+configuration.members[2].priority = 2 // ya que 1 es el valor por defecto
+```
+
+3.- Reconfiguramos con nuestro nuevo objeto de configuración
+
+```
+rs.reconfig(configuration)
+```
+
+Al lanzar reconfig se desencadenan elecciones y como el miembro server3 tiene
+prioridad mayor que los otros y está disponible pasará a ser el primario.
+
