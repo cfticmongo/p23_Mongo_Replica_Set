@@ -114,3 +114,82 @@ rs.reconfig(configuration)
 Al lanzar reconfig se desencadenan elecciones y como el miembro server3 tiene
 prioridad mayor que los otros y está disponible pasará a ser el primario.
 
+## Añadir un nuevo miembro al cluster
+
+1.- Nuevo directorio
+
+mkdir server4
+
+2.- Levantamos servidor con el mismo nombre del cluster
+
+mongod --dbpath server4 --port 27104 --replSet clusterGetafe
+
+3.- Añadir la configuración del nuevo miembro al cluster
+
+Desde una shell conectada al primario
+
+rs.add({
+    host: "localhost:27104",
+    priority: 0, // provisionalmente para que no pueda ser primario
+    votes: 0 // provisionalmente no participe en las elecciones
+})
+
+4.- Comprobamos cuando pasa a SECONDARY
+
+Pasado el tiempo suficiente para que se sincronice, comprobamos que
+ya está en secondary y en ese momento reconfiguramos el cluster
+para que pudiera llegar a ser PRIMARY llegado el caso.
+
+5.- Reconfiguramos para modificar la prioridad y votos del nuevo miembro
+
+let configuration = rs.conf()
+
+configuration.members[3].priority = 1; // Para que pueda en el futuro ser primario
+configuration.members[3].votes = 1;
+
+## Tolerancia a fallos
+
+- Para determinar la tolerancia a fallos debemos tener en cuenta que
+no pueden existir dos primarios al mismo tiempo.
+
+- Para que durante el proceso de elecciones se pueda elegir un nuevo
+primario, debe haber los miembros disponibles una mayoría simple respecto
+al total de los miembros incluyendo los caidos.
+
+Estas reglas o condiciones para que no llegue a haber dos primarios al mismo
+tiempo determina la toleancia a fallos del cluster (según el número de miembros).
+
+nº de Miembros totales       Mayoría (elecciones)      Tolerancia a fallos 
+
+        2                         2                             0
+        3                         2                             1
+        4                         3                             1
+        5                         3                             2
+        6                         4                             2
+        7                         4                             3
+
+* La tolerancia se entiende a las operaciones de escritura y lectura
+
+## Añadir un miembro árbitro
+
+El árbrito se caracteriza por no almacenar los datos de las bases de datos
+por tanto sus requisitos de hardware serán mínimos.
+
+1.- Creamos un directorio
+
+mkdir server5
+
+2.- Levantamos el servidor
+
+mongod --dbpath server5 --port 27105 --replSet clusterGetafe
+
+3.- Añadimos el miembro árbitro
+
+Desde una shell al primario
+
+```
+rs.addArb("localhost:27105") // Simplemente añadir el host del servidor
+```
+
+- Nunca almacenará datos de las bases de datos operativas
+- Nunca podrá llegar a ser primario ni secundario.
