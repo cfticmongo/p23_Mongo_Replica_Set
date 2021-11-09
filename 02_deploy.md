@@ -193,3 +193,74 @@ rs.addArb("localhost:27105") // Simplemente añadir el host del servidor
 
 - Nunca almacenará datos de las bases de datos operativas
 - Nunca podrá llegar a ser primario ni secundario.
+
+## Miembros delayed
+
+Miembros que permiten tener una copia exacta de las bases de datos con un tiempo
+de retraso para permitir recuperaciones de desastres durante esa ventana temporal.
+
+- Tendrá prioridad 0 para que no pueda llegar a ser primario.
+- Tiene que tener una propiedad denominada hidden igual a true para que no pueda recibir lecturas.
+
+Si por ejemplo queremos que nuestro 4º miembro sea delayed procedemos de esta manera:
+
+1.- En el primario recuperamos como siempre la configuración del cluster.
+
+let configuration = rs.conf();
+
+2.- Configuramos el 4º miembro.
+
+configuration.members[3].priority = 0;
+configuration.members[3].hidden = true;
+configuration.members[3].secondaryDelaySecs = 120; // Recibe un entero con el tiempo de delay en segundos (normalmente
+se empleará aprox 30 min y 60 min)
+
+3.- Reconfiguramos.
+
+rs.reconfig(configuration)
+
+Para comprobar podemos en una colección desde el primario añadir sucesivos
+documentos y exportarlos desde el servidor 4 con la herramienta mongoexport:
+
+mongoexport --port 27104 --db=clinica --collection=pacientes --out=datosDelayed.json
+
+Mongoexport y el resto de herramientas se pueden descargar desde:
+
+https://www.mongodb.com/try/download/tools
+
+## Miembros con votos 0
+
+Son miembros en los cuales no tendrán la posibilidad de participar en las elecciones (proceso de
+determinación de primario) ni de ser primarios.
+
+Se utiliza para los miembros adicionales al máximo nº de miembros con voto que serán 7, siendo el número
+total máximo de miembros 50.
+
+## Retirada de miembros
+
+Por el motivo que fuera podemos retirar miembros de la siguiente manera.
+
+1.- Apagar el servidor del miembro a retirar.
+
+2.- Desde la shell conectada al primario
+
+Desde mongoDB 5.0 hay que quitar el writeConcern por defecto
+
+use admin
+
+db.adminCommand({
+  "setDefaultRWConcern" : 1,
+  "defaultWriteConcern" : {
+    "w" : 1
+  }
+})
+
+Posteriormente eliminar el miembro
+
+rs.remove("localhost:27104");
+rs.remove("localhost:27105");
+
+
+
+
+
